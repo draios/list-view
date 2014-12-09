@@ -753,8 +753,6 @@ export default Ember.Mixin.create({
       for (count = 0; count < delta; count++, contentIndex++) {
         this._addItemView(contentIndex);
       }
-
-      this._reuseChildren();
     } else {
       // less views are needed
       forEach.call(
@@ -762,9 +760,9 @@ export default Ember.Mixin.create({
         removeAndDestroy,
         this
       );
-
-      this._reuseChildren();
     }
+
+    this._reuseChildren();
 
     this._lastStartingIndex = startingIndex;
     this._lastEndingIndex   = this._lastEndingIndex + delta;

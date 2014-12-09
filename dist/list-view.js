@@ -1312,6 +1312,8 @@ define("list-view/list_view_mixin",
           for (count = 0; count < delta; count++, contentIndex++) {
             this._addItemView(contentIndex);
           }
+
+          this._reuseChildren();
         } else {
           // less views are needed
           forEach.call(
@@ -1319,9 +1321,9 @@ define("list-view/list_view_mixin",
             removeAndDestroy,
             this
           );
-        }
 
-        this._reuseChildren();
+          this._reuseChildren();
+        }
 
         this._lastStartingIndex = startingIndex;
         this._lastEndingIndex   = this._lastEndingIndex + delta;

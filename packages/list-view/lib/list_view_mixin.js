@@ -800,12 +800,12 @@ export default Ember.Mixin.create({
     var contentLength, childViews, childViewsLength,
         startingIndex, endingIndex, childView, attrs,
         contentIndex, visibleEndingIndex, maxContentIndex,
-        contentIndexEnd, scrollTop;
+        contentIndexEnd, scrollTop, childViewsIndex, maxChildViewsIndex;
 
     scrollTop = this.scrollTop;
     contentLength = get(this, 'content.length');
     maxContentIndex = max(contentLength - 1, 0);
-    childViews = this.getReusableChildViews();
+    childViews = this.positionOrderedChildViews();
     childViewsLength =  childViews.length;
 
     startingIndex = this._startingIndex();
@@ -815,8 +815,8 @@ export default Ember.Mixin.create({
 
     contentIndexEnd = min(visibleEndingIndex, startingIndex + childViewsLength);
 
-    for (contentIndex = startingIndex; contentIndex < contentIndexEnd; contentIndex++) {
-      childView = childViews[contentIndex % childViewsLength];
+    for (contentIndex = startingIndex, childViewsIndex=0; contentIndex <= contentIndexEnd && childViewsIndex < childViewsLength; contentIndex++, childViewsIndex++) {
+      childView = childViews[childViewsIndex];
       this._reuseChildForContentIndex(childView, contentIndex);
     }
   },

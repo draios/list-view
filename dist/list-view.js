@@ -1312,8 +1312,6 @@ define("list-view/list_view_mixin",
           for (count = 0; count < delta; count++, contentIndex++) {
             this._addItemView(contentIndex);
           }
-
-          this._reuseChildren();
         } else {
           // less views are needed
           forEach.call(
@@ -1321,9 +1319,9 @@ define("list-view/list_view_mixin",
             removeAndDestroy,
             this
           );
-
-          this._reuseChildren();
         }
+
+        this._reuseChildren();
 
         this._lastStartingIndex = startingIndex;
         this._lastEndingIndex   = this._lastEndingIndex + delta;
@@ -1359,25 +1357,21 @@ define("list-view/list_view_mixin",
       */
       _reuseChildren: function(){
         var contentLength, childViews, childViewsLength,
-            startingIndex, endingIndex, childView, attrs,
-            contentIndex, visibleEndingIndex, maxContentIndex,
-            contentIndexEnd, scrollTop;
+            startingIndex, childView, contentIndex, 
+            visibleEndingIndex, contentIndexEnd, 
+            childViewsIndex;
 
-        scrollTop = this.scrollTop;
         contentLength = get(this, 'content.length');
-        maxContentIndex = max(contentLength - 1, 0);
-        childViews = this.getReusableChildViews();
+        childViews = this.positionOrderedChildViews();
         childViewsLength =  childViews.length;
-
         startingIndex = this._startingIndex();
         visibleEndingIndex = startingIndex + this._numChildViewsForViewport();
-
-        endingIndex = min(maxContentIndex, visibleEndingIndex);
-
         contentIndexEnd = min(visibleEndingIndex, startingIndex + childViewsLength);
 
-        for (contentIndex = startingIndex; contentIndex < contentIndexEnd; contentIndex++) {
-          childView = childViews[contentIndex % childViewsLength];
+        for (contentIndex = startingIndex, childViewsIndex=0; 
+             contentIndex <= contentIndexEnd && childViewsIndex < childViewsLength;
+             contentIndex++, childViewsIndex++) {
+          childView = childViews[childViewsIndex];
           this._reuseChildForContentIndex(childView, contentIndex);
         }
       },

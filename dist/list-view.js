@@ -1362,16 +1362,14 @@ define("list-view/list_view_mixin",
             childViewsIndex;
 
         contentLength = get(this, 'content.length');
-        childViews = this.positionOrderedChildViews();
+        childViews = this.getReusableChildViews();
         childViewsLength =  childViews.length;
         startingIndex = this._startingIndex();
         visibleEndingIndex = startingIndex + this._numChildViewsForViewport();
         contentIndexEnd = min(visibleEndingIndex, startingIndex + childViewsLength);
-
-        for (contentIndex = startingIndex, childViewsIndex=0; 
-             contentIndex <= contentIndexEnd && childViewsIndex < childViewsLength;
-             contentIndex++, childViewsIndex++) {
-          childView = childViews[childViewsIndex];
+         
+        for (contentIndex = startingIndex; contentIndex < contentIndexEnd; contentIndex++) {
+          childView = childViews[contentIndex - startingIndex];
           this._reuseChildForContentIndex(childView, contentIndex);
         }
       },

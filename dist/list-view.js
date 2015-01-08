@@ -118,13 +118,10 @@ var define, requireModule, require, requirejs;
 })();
 
 define("list-view/helper",
-  ["./list_view","./virtual_list_view","exports"],
-  function(__dependency1__, __dependency2__, __exports__) {
+  ["exports"],
+  function(__exports__) {
     "use strict";
-    var EmberListView = __dependency1__["default"];
-    var EmberVirtualListView = __dependency2__["default"];
-
-    function createHelper (view, options) {
+    __exports__["default"] = function emberList(options) {
       var hash = options.hash;
       var types = options.hashTypes;
 
@@ -135,8 +132,8 @@ define("list-view/helper",
       delete types.items;
 
       if (!hash.content) {
-        hash.content = 'this';
-        types.content = 'ID';
+        hash.content = "this";
+        types.content = "ID";
       }
 
       for (var prop in hash) {
@@ -149,31 +146,91 @@ define("list-view/helper",
         }
       }
 
-      /*jshint validthis:true */
-      return Ember.Handlebars.helpers.collection.call(this, view, options);
-    }
-
-    function EmberList (options) {
-      return createHelper.call(this, EmberListView, options);
-    }
-
-    __exports__.EmberList = EmberList;__exports__["default"] = EmberList;
-
-    function EmberVirtualList (options) {
-      return createHelper.call(this, EmberVirtualListView, options);
-    }
-
-    __exports__.EmberVirtualList = EmberVirtualList;
+      return Ember.Handlebars.helpers.collection.call(this, 'Ember.ListView', options);
+    };
   });
 define("list-view/list_item_view",
   ["list-view/list_item_view_mixin","exports"],
   function(__dependency1__, __exports__) {
     "use strict";
-    /*jshint validthis:true */
+    // jshint validthis: true
 
     var ListItemViewMixin = __dependency1__["default"];
 
     var get = Ember.get, set = Ember.set;
+
+    function backportedInnerString(buffer) {
+      var content = [], childBuffers = buffer.childBuffers;
+
+      Ember.ArrayPolyfills.forEach.call(childBuffers, function(buffer) {
+        var stringy = typeof buffer === 'string';
+        if (stringy) {
+          content.push(buffer);
+        } else {
+          buffer.array(content);
+        }
+      });
+
+      return content.join('');
+    }
+
+    function willInsertElementIfNeeded(view) {
+      if (view.willInsertElement) {
+        view.willInsertElement();
+      }
+    }
+
+    function didInsertElementIfNeeded(view) {
+      if (view.didInsertElement) {
+        view.didInsertElement();
+      }
+    }
+
+    function rerender() {
+      var element, buffer, context, hasChildViews;
+      element = get(this, 'element');
+
+      if (!element) { return; }
+
+      context = get(this, 'context');
+
+
+      // releases action helpers in contents
+      // this means though that the ListItemView itself can't use classBindings or attributeBindings
+      // need support for rerender contents in ember
+      this.triggerRecursively('willClearRender');
+
+      if (this.lengthAfterRender > this.lengthBeforeRender) {
+        this.clearRenderedChildren();
+        this._childViews.length = this.lengthBeforeRender; // triage bug in ember
+      }
+
+      if (context) {
+        buffer = Ember.RenderBuffer();
+        buffer = this.renderToBuffer(buffer);
+
+        // check again for childViews, since rendering may have added some
+        hasChildViews = this._childViews.length > 0;
+
+        if (hasChildViews) {
+          this.invokeRecursively(willInsertElementIfNeeded, false);
+        }
+
+        element.innerHTML = buffer.innerString ? buffer.innerString() : backportedInnerString(buffer);
+
+        set(this, 'element', element);
+
+        var transitionTo = this._transitionTo ? this._transitionTo : this.transitionTo;
+
+        transitionTo.call(this, 'inDOM');
+
+        if (hasChildViews) {
+          this.invokeRecursively(didInsertElementIfNeeded, false);
+        }
+      } else {
+        element.innerHTML = ''; // when there is no context, this view should be completely empty
+      }
+    }
 
     /**
       The `Ember.ListItemView` view class renders a
@@ -202,9 +259,8 @@ define("list-view/list_item_view",
       @namespace Ember
     */
     __exports__["default"] = Ember.View.extend(ListItemViewMixin, {
-      updateContext: function(newContext) {
+      updateContext: function(newContext){
         var context = get(this, 'context');
-
         Ember.instrument('view.updateContext.render', this, function() {
           if (context !== newContext) {
             set(this, 'context', newContext);
@@ -214,25 +270,19 @@ define("list-view/list_item_view",
           }
         }, this);
       },
-
       rerender: function () {
-        if (this.isDestroying || this.isDestroyed) {
-          return;
-        }
-
-        return this._super.apply(this, arguments);
+        Ember.run.scheduleOnce('render', this, rerender);
       },
-
-      _contextDidChange: Ember.observer(function () {
-        Ember.run.once(this, this.rerender);
-      }, 'context', 'controller')
+      _contextDidChange: Ember.observer(rerender, 'context', 'controller')
     });
   });
 define("list-view/list_item_view_mixin",
   ["exports"],
   function(__exports__) {
     "use strict";
-    /*jshint validthis:true */
+    // jshint validthis: true
+
+    var get = Ember.get, set = Ember.set;
 
     function samePosition(a, b) {
       return a && b && a.x === b.x && a.y === b.y;
@@ -242,40 +292,32 @@ define("list-view/list_item_view_mixin",
       var element, position, _position;
 
       Ember.instrument('view.updateContext.positionElement', this, function() {
-        element = this.element;
+        element = get(this, 'element');
         position = this.position;
         _position = this._position;
 
-        if (!position || !element) {
-          return;
-        }
+        if (!position || !element) { return; }
 
-        // // TODO: avoid needing this by avoiding unnecessary
-        // // calls to this method in the first place
-        if (samePosition(position, _position)) {
-          return;
-        }
-
-        Ember.run.schedule('render', this, this._parentView.applyTransform, this, position.x, position.y);
+        // TODO: avoid needing this by avoiding unnecessary
+        // calls to this method in the first place
+        if (samePosition(position, _position)) { return; }
+        Ember.run.schedule('render', this, this._parentView.applyTransform, element, position.x, position.y);
         this._position = position;
       }, this);
     }
 
     __exports__["default"] = Ember.Mixin.create({
-      classNames: ['ember-list-item-view'],
-      style: '',
-      attributeBindings: ['style'],
-      _position: null,
-      _positionElement: positionElement,
-
-      positionElementWhenInserted: Ember.on('init', function(){
+      init: function(){
+        this._super();
         this.one('didInsertElement', positionElement);
-      }),
-
+      },
+      classNames: ['ember-list-item-view'],
+      _position: null,
       updatePosition: function(position) {
         this.position = position;
         this._positionElement();
-      }
+      },
+      _positionElement: positionElement
     });
   });
 define("list-view/list_view",
@@ -285,7 +327,7 @@ define("list-view/list_view",
     var ListViewHelper = __dependency1__["default"];
     var ListViewMixin = __dependency2__["default"];
 
-    var get = Ember.get;
+    var get = Ember.get, set = Ember.set;
 
     /**
       The `Ember.ListView` view class renders a
@@ -393,30 +435,36 @@ define("list-view/list_view",
       applyTransform: ListViewHelper.applyTransform,
 
       _scrollTo: function(scrollTop) {
-        var element = this.element;
+        var element = get(this, 'element');
 
         if (element) { element.scrollTop = scrollTop; }
       },
 
       didInsertElement: function() {
         var that = this;
+        var element = get(this, 'element');
 
         this._updateScrollableHeight();
 
         this._scroll = function(e) { that.scroll(e); };
 
-        Ember.$(this.element).on('scroll', this._scroll);
+        Ember.$(element).on('scroll', this._scroll);
       },
 
       willDestroyElement: function() {
-        Ember.$(this.element).off('scroll', this._scroll);
+        var element;
+
+        element = get(this, 'element');
+
+        Ember.$(element).off('scroll', this._scroll);
       },
 
       scroll: function(e) {
         this.scrollTo(e.target.scrollTop);
       },
 
-      scrollTo: function(y) {
+      scrollTo: function(y){
+        var element = get(this, 'element');
         this._scrollTo(y);
         this._scrollContentTo(y);
       },
@@ -451,95 +499,57 @@ define("list-view/list_view_helper",
   function(__exports__) {
     "use strict";
     // TODO - remove this!
-    var el    = document.body || document.createElement('div');
-    var style = el.style;
-    var set   = Ember.set;
+    var el = document.createElement('div'), style = el.style;
 
-    function getElementStyle (prop) {
+    var propPrefixes = ['Webkit', 'Moz', 'O', 'ms'];
+
+    function testProp(prop) {
+      if (prop in style) return prop;
       var uppercaseProp = prop.charAt(0).toUpperCase() + prop.slice(1);
-
-      var props = [
-        prop,
-        'webkit' + prop,
-        'webkit' + uppercaseProp,
-        'Moz'    + uppercaseProp,
-        'moz'    + uppercaseProp,
-        'ms'     + uppercaseProp,
-        'ms'     + prop
-      ];
-
-      for (var i=0; i < props.length; i++) {
-        var property = props[i];
-
-        if (property in style) {
-          return property;
+      for (var i=0; i<propPrefixes.length; i++) {
+        var prefixedProp = propPrefixes[i] + uppercaseProp;
+        if (prefixedProp in style) {
+          return prefixedProp;
         }
       }
-
       return null;
     }
 
-    function getCSSStyle (attr) {
-      var styleName = getElementStyle(attr);
-      var prefix    = styleName.toLowerCase().replace(attr, '');
+    var transformProp = testProp('transform');
+    var perspectiveProp = testProp('perspective');
 
-      var dic = {
-        webkit: '-webkit-' + attr,
-        moz:    '-moz-' + attr,
-        ms:     '-ms-' + attr
-      };
-
-      if (prefix && dic[prefix]) {
-        return dic[prefix];
-      }
-
-      return styleName;
-    }
-
-    var styleAttributeName = getElementStyle('transform');
-    var transformProp      = getCSSStyle('transform');
-    var perspectiveProp    = getElementStyle('perspective');
-    var supports2D         = !!transformProp;
-    var supports3D         = !!perspectiveProp;
-
-    function setStyle (optionalStyleString) {
-      return function (obj, x, y) {
-        var isElement = obj instanceof Element;
-
-        if (optionalStyleString && (supports2D || supports3D)) {
-          var style = Ember.String.fmt(optionalStyleString, x, y);
-
-          if (isElement) {
-            obj.style[styleAttributeName] = style;
-          } else {
-            set(obj, 'style', transformProp + ': ' + style);
-          }
-        } else {
-          if (isElement) {
-            obj.style.top = y;
-            obj.style.left = x;
-          }
-        }
-      };
-    }
+    var supports2D = transformProp !== null;
+    var supports3D = perspectiveProp !== null;
 
     __exports__["default"] = {
       transformProp: transformProp,
-      applyTransform: (function () {
+      applyTransform: (function(){
         if (supports2D) {
-          return setStyle('translate(%@px, %@px)');
+          return function(element, x, y){
+            element.style[transformProp] = 'translate(' + x + 'px, ' + y + 'px)';
+          };
+        } else {
+          return function(element, x, y){
+            element.style.top  = y + 'px';
+            element.style.left = x + 'px';
+          };
         }
-
-        return setStyle();
       })(),
-      apply3DTransform: (function () {
+      apply3DTransform: (function(){
         if (supports3D) {
-          return setStyle('translate3d(%@px, %@px, 0)');
+          return function(element, x, y){
+            element.style[transformProp] = 'translate3d(' + x + 'px, ' + y + 'px, 0)';
+          };
         } else if (supports2D) {
-          return setStyle('translate(%@px, %@px)');
+          return function(element, x, y){
+            element.style[transformProp] = 'translate(' + x + 'px, ' + y + 'px)';
+          };
+        } else {
+          return function(element, x, y){
+            element.style.top  = y + 'px';
+            element.style.left = x + 'px';
+          };
         }
-
-        return setStyle();
       })()
     };
   });
@@ -547,17 +557,15 @@ define("list-view/list_view_mixin",
   ["list-view/reusable_list_item_view","exports"],
   function(__dependency1__, __exports__) {
     "use strict";
-    /*jshint validthis:true */
+    // jshint validthis: true
 
     var ReusableListItemView = __dependency1__["default"];
 
-    var get     = Ember.get;
-    var set     = Ember.set;
-    var min     = Math.min;
-    var max     = Math.max;
-    var floor   = Math.floor;
-    var ceil    = Math.ceil;
-    var forEach = Ember.ArrayPolyfills.forEach;
+    var get = Ember.get, set = Ember.set,
+
+    min = Math.min, max = Math.max, floor = Math.floor,
+    ceil = Math.ceil,
+    forEach = Ember.ArrayPolyfills.forEach;
 
     function addContentArrayObserver() {
       var content = get(this, 'content');
@@ -577,6 +585,12 @@ define("list-view/list_view_mixin",
 
     function sortByContentIndex (viewOne, viewTwo) {
       return get(viewOne, 'contentIndex') - get(viewTwo, 'contentIndex');
+    }
+
+    function notifyMutationListeners() {
+      if (Ember.View.notifyMutationListeners) {
+        Ember.run.once(Ember.View, 'notifyMutationListeners');
+      }
     }
 
     function removeEmptyView() {
@@ -610,12 +624,19 @@ define("list-view/list_view_mixin",
       this.unshiftObject(emptyView);
     }
 
+    var domManager = Ember.create(Ember.ContainerView.proto().domManager);
+
+    domManager.prepend = function(view, html) {
+      view.$('.ember-list-container').prepend(html);
+      notifyMutationListeners();
+    };
+
     function enableProfilingOutput() {
-      function before(name, time/*, payload*/) {
+      function before(name, time, payload) {
         console.time(name);
       }
 
-      function after (name, time/*, payload*/) {
+      function after (name, time, payload) {
         console.timeEnd(name);
       }
 
@@ -641,6 +662,7 @@ define("list-view/list_view_mixin",
       classNames: ['ember-list-view'],
       attributeBindings: ['style'],
       classNameBindings: ['_isGrid:ember-list-view-grid:ember-list-view-list'],
+      domManager: domManager,
       scrollTop: 0,
       bottomPadding: 0, // TODO: maybe this can go away
       _lastEndingIndex: 0,
@@ -683,26 +705,15 @@ define("list-view/list_view_mixin",
         @method render
         @param {Ember.RenderBuffer} buffer The render buffer
       */
-      render: function (buffer) {
-        var element          = buffer.element();
-        var dom              = buffer.dom;
-        var container        = dom.createElement('div');
-        container.className  = 'ember-list-container';
-        element.appendChild(container);
-
-        this._childViewsMorph = dom.createMorph(container, container, null);
-
-        return container;
-      },
-
-      createChildViewsMorph: function (element) {
-        this._childViewsMorph = this._renderer._dom.createMorph(element.lastChild, element.lastChild, null);
-        return element;
+      render: function(buffer) {
+        buffer.push('<div class="ember-list-container">');
+        this._super(buffer);
+        buffer.push('</div>');
       },
 
       willInsertElement: function() {
-        if (!this.get('height') || !this.get('rowHeight')) {
-          throw new Error('A ListView must be created with a height and a rowHeight.');
+        if (!this.get("height") || !this.get("rowHeight")) {
+          throw new Error("A ListView must be created with a height and a rowHeight.");
         }
         this._super();
       },
@@ -879,10 +890,6 @@ define("list-view/list_view_mixin",
         childView.prepareForReuse();
       },
 
-      createChildView: function (_view) {
-        return this._super(_view, this._itemViewProps || {});
-      },
-
       /**
         @private
         @method _reuseChildForContentIndex
@@ -895,14 +902,16 @@ define("list-view/list_view_mixin",
         if (childView.constructor !== contentViewClass) {
           // rather then associative arrays, lets move childView + contentEntry maping to a Map
           var i = this._childViews.indexOf(childView);
+
           childView.destroy();
           childView = this.createChildView(contentViewClass);
+
           this.insertAt(i, childView);
         }
 
-        content         = get(this, 'content');
+        content = get(this, 'content');
         enableProfiling = get(this, 'enableProfiling');
-        position        = this.positionForIndex(contentIndex);
+        position = this.positionForIndex(contentIndex);
         childView.updatePosition(position);
 
         set(childView, 'contentIndex', contentIndex);
@@ -1029,7 +1038,7 @@ define("list-view/list_view_mixin",
         currentScrollTop = this.scrollTop;
         newColumnCount = get(this, 'columnCount');
         maxScrollTop = get(this, 'maxScrollTop');
-        element = this.element;
+        element = get(this, 'element');
 
         this._lastColumnCount = newColumnCount;
 
@@ -1189,7 +1198,9 @@ define("list-view/list_view_mixin",
         @event contentWillChange
       */
       contentWillChange: Ember.beforeObserver(function() {
-        var content = get(this, 'content');
+        var content;
+
+        content = get(this, 'content');
 
         if (content) {
           content.removeArrayObserver(this);
@@ -1220,11 +1231,12 @@ define("list-view/list_view_mixin",
         @param {Number} contentIndex item index in the content array
         @method _addItemView
       */
-      _addItemView: function (contentIndex) {
+      _addItemView: function(contentIndex){
         var itemViewClass, childView;
 
         itemViewClass = this.itemViewForIndex(contentIndex);
         childView = this.createChildView(itemViewClass);
+
         this.pushObject(childView);
       },
 
@@ -1263,13 +1275,13 @@ define("list-view/list_view_mixin",
 
         @method _syncChildViews
        **/
-      _syncChildViews: function () {
+      _syncChildViews: function(){
         var childViews, childViewCount,
             numberOfChildViews, numberOfChildViewsNeeded,
             contentIndex, startingIndex, endingIndex,
             contentLength, emptyView, count, delta;
 
-        if (this.isDestroyed || this.isDestroying) {
+        if (get(this, 'isDestroyed') || get(this, 'isDestroying')) {
           return;
         }
 
@@ -1400,7 +1412,7 @@ define("list-view/list_view_mixin",
         var index, contentIndex, state;
 
         if (this._isChildEmptyView()) {
-          removeEmptyView.call(this);
+            removeEmptyView.call(this);
         }
 
         // Support old and new Ember versions
@@ -1428,9 +1440,7 @@ define("list-view/list_view_mixin",
       },
 
       destroy: function () {
-        if (!this._super()) {
-          return;
-        }
+        if (!this._super()) { return; }
 
         if (this._createdEmptyView) {
           this._createdEmptyView.destroy();
@@ -1447,8 +1457,7 @@ define("list-view/main",
     var ReusableListItemView = __dependency1__["default"];
     var VirtualListView = __dependency2__["default"];
     var ListItemView = __dependency3__["default"];
-    var EmberList = __dependency4__.EmberList;
-    var EmberVirtualList = __dependency4__.EmberVirtualList;
+    var EmberList = __dependency4__["default"];
     var ListView = __dependency5__["default"];
     var ListViewHelper = __dependency6__["default"];
 
@@ -1459,7 +1468,6 @@ define("list-view/main",
     Ember.ListViewHelper       = ListViewHelper;
 
     Ember.Handlebars.registerHelper('ember-list', EmberList);
-    Ember.Handlebars.registerHelper('ember-virtual-list', EmberVirtualList);
   });
 define("list-view/reusable_list_item_view",
   ["list-view/list_item_view_mixin","exports"],
@@ -1470,24 +1478,20 @@ define("list-view/reusable_list_item_view",
     var get = Ember.get, set = Ember.set;
 
     __exports__["default"] = Ember.View.extend(ListItemViewMixin, {
-      prepareForReuse: Ember.K,
-
-      init: function () {
+      init: function(){
         this._super();
         var context = Ember.ObjectProxy.create();
         this.set('context', context);
         this._proxyContext = context;
       },
-
-      isVisible: Ember.computed('context.content', function () {
+      isVisible: Ember.computed('context.content', function(){
         return !!this.get('context.content');
       }),
-
-      updateContext: function (newContext) {
-        var context = get(this._proxyContext, 'content');
+      updateContext: function(newContext){
+        var context = get(this._proxyContext, 'content'), state;
 
         // Support old and new Ember versions
-        var state = this._state || this.state;
+        state = this._state || this.state;
 
         if (context !== newContext) {
           if (state === 'inDOM') {
@@ -1500,15 +1504,15 @@ define("list-view/reusable_list_item_view",
             set(this, 'controller', newContext);
           }
         }
-      }
+      },
+      prepareForReuse: Ember.K
     });
   });
 define("list-view/virtual_list_scroller_events",
   ["exports"],
   function(__exports__) {
     "use strict";
-    /*jshint validthis:true */
-
+    // jshint validthis: true
     var fieldRegex = /input|textarea|select/i,
       hasTouch = ('ontouchstart' in window) || window.DocumentTouch && document instanceof window.DocumentTouch,
       handleStart, handleMove, handleEnd, handleCancel,
@@ -1549,9 +1553,7 @@ define("list-view/virtual_list_scroller_events",
     } else {
       startEvent = 'mousedown';
       handleStart = function (e) {
-        if (e.which !== 1) {
-          return;
-        }
+        if (e.which !== 1) return;
         var target = e.target;
         // avoid e.preventDefault() on fields
         if (target && fieldRegex.test(target.tagName)) {
@@ -1572,9 +1574,7 @@ define("list-view/virtual_list_scroller_events",
       };
       cancelEvent = 'mouseout';
       handleCancel = function (e) {
-        if (e.relatedTarget) {
-          return;
-        }
+        if (e.relatedTarget) return;
         unbindWindow(this.scrollerEventHandlers);
         this.endScroll(e.timeStamp);
       };
@@ -1663,7 +1663,7 @@ define("list-view/virtual_list_view",
     var ListViewHelper = __dependency2__["default"];
     var VirtualListScrollerEvents = __dependency3__["default"];
 
-    var get = Ember.get;
+    var max = Math.max, get = Ember.get, set = Ember.set;
 
     function updateScrollerDimensions(target) {
       var width, height, totalHeight;
@@ -1701,15 +1701,15 @@ define("list-view/virtual_list_view",
       applyTransform: ListViewHelper.apply3DTransform,
 
       setupScroller: function(){
-        var view = this;
+        var view, y;
 
-        view.scroller = new Scroller(function(left, top/*, zoom*/) {
+        view = this;
+
+        view.scroller = new Scroller(function(left, top, zoom) {
           // Support old and new Ember versions
           var state = view._state || view.state;
 
-          if (state !== 'inDOM') {
-            return;
-          }
+          if (state !== 'inDOM') { return; }
 
           if (view.listContainerElement) {
             view._scrollerTop = top;
@@ -1727,22 +1727,17 @@ define("list-view/virtual_list_view",
         updateScrollerDimensions(view);
       },
       setupPullToRefresh: function() {
-        if (!this.pullToRefreshViewClass) {
-          return;
-        }
-
+        if (!this.pullToRefreshViewClass) { return; }
         this._insertPullToRefreshView();
         this._activateScrollerPullToRefresh();
       },
       _insertPullToRefreshView: function(){
         this.pullToRefreshView = this.createChildView(this.pullToRefreshViewClass);
         this.insertAt(0, this.pullToRefreshView);
-
         var view = this;
-
-        this.pullToRefreshView.on('didInsertElement', function() {
-          Ember.run.scheduleOnce('afterRender', this, function(){
-            view.applyTransform(this.element, 0, -1 * view.pullToRefreshViewHeight);
+        this.pullToRefreshView.on('didInsertElement', function(){
+          Ember.run.schedule('afterRender', this, function(){
+            view.applyTransform(this.get('element'), 0, -1 * view.pullToRefreshViewHeight);
           });
         });
       },

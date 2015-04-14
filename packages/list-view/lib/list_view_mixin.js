@@ -798,30 +798,18 @@ export default Ember.Mixin.create({
   */
   _reuseChildren: function(){
     var contentLength, childViews, childViewsLength,
-        startingIndex, childView, contentIndex, 
-        visibleEndingIndex, contentIndexEnd, 
+        startingIndex, childView, contentIndex,
+        visibleEndingIndex, contentIndexEnd,
         childViewsIndex;
 
-    contentLength = get(this, 'content.length');
     childViews = this.getReusableChildViews();
     childViewsLength =  childViews.length;
     startingIndex = this._startingIndex();
     visibleEndingIndex = startingIndex + this._numChildViewsForViewport();
     contentIndexEnd = min(visibleEndingIndex, startingIndex + childViewsLength);
 
-    var contentIndexInChildView = false;
-      if (childViews[startingIndex % childViewsLength] !== undefined && 
-          childViews[startingIndex % childViewsLength].get('contentIndex') === startingIndex) {
-        contentIndexInChildView = true;
-    }
-     
     for (contentIndex = startingIndex; contentIndex < contentIndexEnd; contentIndex++) {
-        if (contentIndexInChildView === true) {
-            childView = childViews[contentIndex % childViewsLength];
-        } else {
-            childView = childViews[contentIndex - startingIndex];
-        }
-
+      childView = childViews[contentIndex % childViewsLength];
       this._reuseChildForContentIndex(childView, contentIndex);
     }
   },

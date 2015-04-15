@@ -762,10 +762,14 @@ export default Ember.Mixin.create({
       );
     }
 
-    this._reuseChildren();
+    // Do not call reuseChildren if not strictly necessary due to
+    // content refresh
+    if (this._lastStartingIndex !== startingIndex || delta !== 0) {
+      this._reuseChildren();
 
-    this._lastStartingIndex = startingIndex;
-    this._lastEndingIndex   = this._lastEndingIndex + delta;
+      this._lastStartingIndex = startingIndex;
+      this._lastEndingIndex   = this._lastEndingIndex + delta;
+    }
 
     if (contentLength === 0 || contentLength === undefined) {
       addEmptyView.call(this);

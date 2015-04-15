@@ -24,6 +24,10 @@ function syncChildViews() {
   Ember.run.once(this, '_syncChildViews');
 }
 
+function forceSyncChildViews() {
+    Ember.run.once(this, '_syncChildViews', true);
+}
+
 function sortByContentIndex (viewOne, viewTwo) {
   return get(viewOne, 'contentIndex') - get(viewTwo, 'contentIndex');
 }
@@ -661,7 +665,7 @@ export default Ember.Mixin.create({
     @private
     @property {Function} needsSyncChildViews
   */
-  needsSyncChildViews: Ember.observer(syncChildViews, 'height', 'width', 'columnCount'),
+  needsSyncChildViews: Ember.observer(forceSyncChildViews, 'height', 'width', 'columnCount'),
 
   /**
     @private
@@ -716,11 +720,11 @@ export default Ember.Mixin.create({
 
     @method _syncChildViews
    **/
-  _syncChildViews: function(){
+  _syncChildViews: function(force){
     var childViews, childViewCount,
         numberOfChildViews, numberOfChildViewsNeeded,
         contentIndex, startingIndex, endingIndex,
-        contentLength, emptyView, count, delta;
+        contentLength, emptyView, count, delta, _force = force || false;
 
     if (get(this, 'isDestroyed') || get(this, 'isDestroying')) {
       return;
@@ -764,7 +768,7 @@ export default Ember.Mixin.create({
 
     // Do not call reuseChildren if not strictly necessary due to
     // content refresh
-    if (this._lastStartingIndex !== startingIndex || delta !== 0) {
+    if (_force === true || (this._lastStartingIndex !== startingIndex || delta !== 0)) {
       this._reuseChildren();
 
       this._lastStartingIndex = startingIndex;

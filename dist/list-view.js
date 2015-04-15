@@ -583,6 +583,10 @@ define("list-view/list_view_mixin",
       Ember.run.once(this, '_syncChildViews');
     }
 
+    function forceSyncChildViews() {
+        Ember.run.once(this, '_syncChildViews', true);
+    }
+
     function sortByContentIndex (viewOne, viewTwo) {
       return get(viewOne, 'contentIndex') - get(viewTwo, 'contentIndex');
     }
@@ -1220,7 +1224,7 @@ define("list-view/list_view_mixin",
         @private
         @property {Function} needsSyncChildViews
       */
-      needsSyncChildViews: Ember.observer(syncChildViews, 'height', 'width', 'columnCount'),
+      needsSyncChildViews: Ember.observer(forceSyncChildViews, 'height', 'width', 'columnCount'),
 
       /**
         @private
@@ -1275,11 +1279,11 @@ define("list-view/list_view_mixin",
 
         @method _syncChildViews
        **/
-      _syncChildViews: function(){
+      _syncChildViews: function(force){
         var childViews, childViewCount,
             numberOfChildViews, numberOfChildViewsNeeded,
             contentIndex, startingIndex, endingIndex,
-            contentLength, emptyView, count, delta;
+            contentLength, emptyView, count, delta, _force = force || false;
 
         if (get(this, 'isDestroyed') || get(this, 'isDestroying')) {
           return;
@@ -1321,10 +1325,14 @@ define("list-view/list_view_mixin",
           );
         }
 
-        this._reuseChildren();
+        // Do not call reuseChildren if not strictly necessary due to
+        // content refresh
+        if (_force === true || (this._lastStartingIndex !== startingIndex || delta !== 0)) {
+          this._reuseChildren();
 
-        this._lastStartingIndex = startingIndex;
-        this._lastEndingIndex   = this._lastEndingIndex + delta;
+          this._lastStartingIndex = startingIndex;
+          this._lastEndingIndex   = this._lastEndingIndex + delta;
+        }
 
         if (contentLength === 0 || contentLength === undefined) {
           addEmptyView.call(this);
@@ -1357,30 +1365,18 @@ define("list-view/list_view_mixin",
       */
       _reuseChildren: function(){
         var contentLength, childViews, childViewsLength,
-            startingIndex, childView, contentIndex, 
-            visibleEndingIndex, contentIndexEnd, 
+            startingIndex, childView, contentIndex,
+            visibleEndingIndex, contentIndexEnd,
             childViewsIndex;
 
-        contentLength = get(this, 'content.length');
         childViews = this.getReusableChildViews();
         childViewsLength =  childViews.length;
         startingIndex = this._startingIndex();
         visibleEndingIndex = startingIndex + this._numChildViewsForViewport();
         contentIndexEnd = min(visibleEndingIndex, startingIndex + childViewsLength);
 
-        var contentIndexInChildView = false;
-          if (childViews[startingIndex % childViewsLength] !== undefined && 
-              childViews[startingIndex % childViewsLength].get('contentIndex') === startingIndex) {
-            contentIndexInChildView = true;
-        }
-         
         for (contentIndex = startingIndex; contentIndex < contentIndexEnd; contentIndex++) {
-            if (contentIndexInChildView === true) {
-                childView = childViews[contentIndex % childViewsLength];
-            } else {
-                childView = childViews[contentIndex - startingIndex];
-            }
-
+          childView = childViews[contentIndex % childViewsLength];
           this._reuseChildForContentIndex(childView, contentIndex);
         }
       },

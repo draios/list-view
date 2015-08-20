@@ -2,7 +2,14 @@
 /* global require, module */
 var EmberAddon = require('ember-cli/lib/broccoli/ember-addon');
 
-var app = new EmberAddon();
+var app = new EmberAddon({
+  vendorFiles: {
+    "jquery.js": false,
+    "ember.js": false,
+    "ember-data.js": false,
+    "ember-resolver.js": false
+  }
+});
 
 // Use `app.import` to add additional libraries to the generated
 // output files.

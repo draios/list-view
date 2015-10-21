@@ -611,7 +611,6 @@ export default Ember.Mixin.create({
     }
 
     var viewsNeededForViewport = this._numChildViewsForViewport();
-    var paddingCount = (1 * columnCount);
     var largestStartingIndex = max(contentLength - viewsNeededForViewport, 0);
 
     return min(calculatedStartingIndex, largestStartingIndex);
@@ -800,7 +799,7 @@ export default Ember.Mixin.create({
     var contentLength, childViews, childViewsLength,
         startingIndex, childView, contentIndex,
         visibleEndingIndex, contentIndexEnd,
-        childViewsIndex;
+        childViewsIndex, viewsWithRightContentIndex = false;
 
     childViews = this.getReusableChildViews();
     childViewsLength =  childViews.length;
@@ -808,8 +807,16 @@ export default Ember.Mixin.create({
     visibleEndingIndex = startingIndex + this._numChildViewsForViewport();
     contentIndexEnd = min(visibleEndingIndex, startingIndex + childViewsLength);
 
+    if(childViews.length > 0 && childViews[0].contentIndex === startingIndex && childViews[childViews.length - 1].contentIndex === contentIndexEnd - 1) {
+      viewsWithRightContentIndex = true;
+    }
+
     for (contentIndex = startingIndex; contentIndex < contentIndexEnd; contentIndex++) {
-      childView = childViews[contentIndex % childViewsLength];
+      if (viewsWithRightContentIndex) {
+         childView = childViews[contentIndex - startingIndex];
+       } else {
+         childView = childViews[contentIndex % childViewsLength];
+       }
       this._reuseChildForContentIndex(childView, contentIndex);
     }
   },

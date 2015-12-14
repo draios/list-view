@@ -1424,7 +1424,7 @@ define("list-view/list_view",
         var element = get(this, 'element');
         this._scrollTo(y);
         this._scrollContentTo(y);
-        Ember.run(this, function() {
+        Ember.run.schedule('afterRender', this, function() {
            this.set('scrolling', false);
         });
       },

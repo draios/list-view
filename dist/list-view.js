@@ -1376,6 +1376,7 @@ define("list-view/list_view",
       @namespace Ember
     */
     __exports__["default"] = Ember.ContainerView.extend(ListViewMixin, {
+      classNameBindings: ['scrolling'],
       css: {
         position: 'relative',
         overflow: 'auto',
@@ -1384,6 +1385,8 @@ define("list-view/list_view",
       },
 
       applyTransform: ListViewHelper.applyTransform,
+
+      scrolling: false,
 
       _scrollTo: function(scrollTop) {
         var element = get(this, 'element');
@@ -1414,10 +1417,16 @@ define("list-view/list_view",
         this.scrollTo(e.target.scrollTop);
       },
 
-      scrollTo: function(y){
+      scrollTo: function(y) {
+        Ember.run(this, function() {
+          this.set('scrolling', true);
+        });
         var element = get(this, 'element');
         this._scrollTo(y);
         this._scrollContentTo(y);
+        Ember.run(this, function() {
+           this.set('scrolling', false);
+        });
       },
 
       totalHeightDidChange: Ember.observer(function () {

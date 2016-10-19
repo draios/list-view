@@ -521,6 +521,8 @@ define("list-view/list_view_mixin",
         addContentArrayObserver.call(this);
       }, 'content'),
 
+      containerTagName: 'div',
+
       /**
         Called on your view when it should push strings of HTML into a
         `Ember.RenderBuffer`.
@@ -532,9 +534,10 @@ define("list-view/list_view_mixin",
         @param {Ember.RenderBuffer} buffer The render buffer
       */
       render: function(buffer) {
-        buffer.push('<div class="ember-list-container">');
+        var containerTagName = get(this, 'containerTagName');
+        buffer.push('<%@ class="ember-list-container">'.fmt(containerTagName));
         this._super(buffer);
-        buffer.push('</div>');
+        buffer.push('</%@>'.fmt(containerTagName));
       },
 
       willInsertElement: function() {
